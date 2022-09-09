@@ -6,7 +6,7 @@
 ## contained in the LICENCE file in this directory.
 
 import sys
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import numpy as np
 
 BINARY_SEARCH_STEPS = 9  # number of times to adjust the constant with binary search
@@ -69,7 +69,10 @@ class CarliniL2:
         shape = (batch_size,image_size,image_size,num_channels)
         
         # the variable we're going to optimize over
-        modifier = tf.Variable(np.zeros(shape,dtype=np.float32))
+        self.sess.run(tf.global_variables_initializer())
+        modifier = tf.Variable(np.zeros(shape,dtype=np.float32), name="L2_modifier")
+        init_new_vars_op = tf.initialize_variables([modifier])
+        self.sess.run(init_new_vars_op)
 
         # these are variables to be more efficient in sending data to tf
         self.timg = tf.Variable(np.zeros(shape), dtype=tf.float32)
@@ -87,7 +90,9 @@ class CarliniL2:
         self.newimg = tf.tanh(modifier + self.timg) * self.boxmul + self.boxplus
         
         # prediction BEFORE-SOFTMAX of the model
-        self.output = model.predict(self.newimg)
+        self.sess.run(tf.global_variables_initializer())
+        self.output = model.predict(self.newimg, steps=1)
+        self.sess.run(tf.global_variables_initializer())
         
         # distance to the input data
         self.l2dist = tf.reduce_sum(tf.square(self.newimg-(tf.tanh(self.timg) * self.boxmul + self.boxplus)),[1,2,3])
@@ -122,6 +127,8 @@ class CarliniL2:
         self.setup.append(self.const.assign(self.assign_const))
         
         self.init = tf.variables_initializer(var_list=[modifier]+new_vars)
+        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(self.init)
 
     def attack(self, imgs, targets):
         """
